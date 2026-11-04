@@ -213,6 +213,11 @@ jobs:
         mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
         '
+    - name: Print sha256 of the customer program
+      shell: bash
+      run: 'sha256sum ./SignOutput/rustdesk-*.exe | tee ./SignOutput/SHA256SUMS.txt
+
+        '
     - name: Upload signed Windows Flutter EXE
       if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA == 'true' && env.SIGN_BASE_URL != '-2'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -227,5 +232,7 @@ jobs:
         prerelease: true
         tag_name: ${{ env.TAG_NAME }}
         files: './SignOutput/rustdesk-*.exe
+
+          ./SignOutput/SHA256SUMS.txt
 
           '

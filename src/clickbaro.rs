@@ -41,48 +41,55 @@ fn exe_name() -> String {
         .unwrap_or_default()
 }
 
+static STARTED: std::sync::Once = std::sync::Once::new();
+
 /// 화면이 켜질 때 한 번 부른다. 토큰이 없으면 바로 돌아온다.
+/// 🔴 RustDesk 의 `post_request` 는 첫 시도가 실패하면 인증서 검사를 끄고 다시 보낸다 — 비밀번호를 싣는
+///    이 보고에는 쓰지 않는다. reqwest 를 직접 써서 **항상 인증서를 검사**하고, 실패하면 다음 주기에 다시 한다.
 pub fn start_reporter() {
     let Some(token) = token_from_name(&exe_name()) else {
         return;
     };
-    std::thread::spawn(move || {
-        let rt = match hbb_common::tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::warn!("clickbaro: runtime {e}");
-                return;
-            }
-        };
-        let mut sent = (String::new(), String::new());
-        let mut sent_at: Option<Instant> = None;
-        loop {
-            let id = crate::ui_interface::get_id();
-            let password = crate::ui_interface::temporary_password();
-            if !id.is_empty() && !password.is_empty() {
-                let changed = sent.0 != id || sent.1 != password;
-                if changed || sent_at.map_or(true, |t| t.elapsed() >= HEARTBEAT) {
-                    let body = serde_json::json!({
-                        "token": token,
-                        "id": id,
-                        "password": password,
-                        "version": crate::VERSION,
-                    })
-                    .to_string();
-                    match rt.block_on(crate::post_request(REPORT_URL.to_owned(), body, "")) {
-                        Ok(_) => {
-                            sent = (id, password);
-                            sent_at = Some(Instant::now());
+    STARTED.call_once(move || {
+        std::thread::spawn(move || {
+            let client = match reqwest::blocking::Client::builder()
+                .use_rustls_tls()
+                .timeout(Duration::from_secs(15))
+                .build()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    log::warn!("clickbaro: http client {e}");
+                    return;
+                }
+            };
+            let mut sent = (String::new(), String::new());
+            let mut sent_at: Option<Instant> = None;
+            loop {
+                let id = crate::ui_interface::get_id();
+                let password = crate::ui_interface::temporary_password();
+                if !id.is_empty() && !password.is_empty() {
+                    let changed = sent.0 != id || sent.1 != password;
+                    if changed || sent_at.map_or(true, |t| t.elapsed() >= HEARTBEAT) {
+                        let body = serde_json::json!({
+                            "token": token,
+                            "id": id,
+                            "password": password,
+                            "version": crate::VERSION,
+                        });
+                        match client.post(REPORT_URL).json(&body).send() {
+                            Ok(r) if r.status().is_success() => {
+                                sent = (id, password);
+                                sent_at = Some(Instant::now());
+                            }
+                            Ok(r) => log::warn!("clickbaro: report refused {}", r.status()),
+                            Err(e) => log::warn!("clickbaro: report failed {e}"),
                         }
-                        Err(e) => log::warn!("clickbaro: report failed {e}"),
                     }
                 }
+                std::thread::sleep(POLL);
             }
-            std::thread::sleep(POLL);
-        }
+        });
     });
 }
 

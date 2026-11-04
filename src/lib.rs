@@ -50,7 +50,7 @@ mod clipboard;
 pub mod core_main;
 mod custom_server;
 // 클릭바로 원격지원: 켜지면 접속 정보를 support.clickbaro.com 에 알린다
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(all(feature = "flutter", not(any(target_os = "android", target_os = "ios"))))]
 pub mod clickbaro;
 mod lang;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
