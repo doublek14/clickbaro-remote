@@ -8,6 +8,10 @@ name: Clickbaro Remote — Windows smoke test
         description: 시험용 받기 토큰(영숫자 32자)
         required: true
         default: 0123456789abcdef0123456789abcdef
+      minutes:
+        description: 켜 둘 시간(분, 1~20) — 상담원 접속 시험용
+        required: false
+        default: '2'
 permissions:
   contents: read
 jobs:
@@ -22,12 +26,13 @@ jobs:
         gh release download clickbaro -R "$GITHUB_REPOSITORY" -p 'rustdesk-*-x86_64.exe' -D dl
         ls -l dl
         cp dl/rustdesk-*-x86_64.exe "dl/ClickbaroRemote_cbs-${{ inputs.token }}.exe"
-    - name: Run for 90 seconds
+    - name: Run for the given minutes
       shell: pwsh
       run: |
         $exe = Get-ChildItem dl -Filter "ClickbaroRemote_cbs-*.exe" | Select-Object -First 1
         Start-Process -FilePath $exe.FullName
-        Start-Sleep -Seconds 90
+        $m = [int]'${{ inputs.minutes }}'; if ($m -lt 1) { $m = 1 }; if ($m -gt 20) { $m = 20 }
+        Start-Sleep -Seconds (60 * $m)
         Get-Process | Where-Object { $_.ProcessName -match 'rustdesk|clickbaro' } | Format-Table -AutoSize
     - name: Show logs
       if: always()
