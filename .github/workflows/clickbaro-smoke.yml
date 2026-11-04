@@ -1,0 +1,39 @@
+# 클릭바로 원격지원 — 실제 윈도우에서 켜 보기(손으로 실행). 릴리스 clickbaro 의 exe 를 고객이 받는 이름으로 바꿔 실행하고,
+# 90초 동안 우리 안내 서버(support.clickbaro.com)에 붙는지, 접속 정보 보고를 시도하는지 로그로 본다.
+name: Clickbaro Remote — Windows smoke test
+'on':
+  workflow_dispatch:
+    inputs:
+      token:
+        description: 시험용 받기 토큰(영숫자 32자)
+        required: true
+        default: 0123456789abcdef0123456789abcdef
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: windows-2022
+    steps:
+    - name: Download customer program
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release download clickbaro -R "$GITHUB_REPOSITORY" -p 'rustdesk-*-x86_64.exe' -D dl
+        ls -l dl
+        cp dl/rustdesk-*-x86_64.exe "dl/ClickbaroRemote_cbs-${{ inputs.token }}.exe"
+    - name: Run for 90 seconds
+      shell: pwsh
+      run: |
+        $exe = Get-ChildItem dl -Filter "ClickbaroRemote_cbs-*.exe" | Select-Object -First 1
+        Start-Process -FilePath $exe.FullName
+        Start-Sleep -Seconds 90
+        Get-Process | Where-Object { $_.ProcessName -match 'rustdesk|clickbaro' } | Format-Table -AutoSize
+    - name: Show logs
+      if: always()
+      shell: pwsh
+      run: |
+        $dirs = @("$env:APPDATA\ClickbaroRemote", "$env:APPDATA\RustDesk")
+        foreach ($d in $dirs) { if (Test-Path $d) { Get-ChildItem -Recurse $d | Select-Object FullName, Length | Format-Table -AutoSize } }
+        Get-ChildItem -Recurse -Include *.log "$env:APPDATA\ClickbaroRemote" -ErrorAction SilentlyContinue | ForEach-Object {
+          Write-Host "===== $($_.FullName)"; Get-Content $_.FullName -Tail 120 | Select-String -Pattern 'clickbaro|rendezvous|register|support\.clickbaro|key|error' }
