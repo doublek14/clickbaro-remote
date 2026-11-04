@@ -43,12 +43,8 @@ env:
   SIGN_BASE_URL: '-2'
 jobs:
   generate-bridge:
-    needs:
-    - validate-update-metadata-keys
     uses: ./.github/workflows/bridge.yml
   build-RustDeskTempTopMostWindow:
-    needs:
-    - validate-update-metadata-keys
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
       fail-fast: false
@@ -56,8 +52,6 @@ jobs:
         job:
         - target: windows-2022
           platform: x64
-        - target: windows-11-arm
-          platform: ARM64
     with:
       upload-artifact: ${{ inputs.upload-artifact }}
       target: ${{ matrix.job.target }}
