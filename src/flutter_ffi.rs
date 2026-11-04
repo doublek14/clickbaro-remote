@@ -1865,6 +1865,8 @@ pub fn cm_get_clients_length() -> usize {
 pub fn main_init(app_dir: String, custom_client_config: String) {
     initialize(&app_dir, &custom_client_config);
     crate::keyboard::shortcuts::reload_from_config();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    crate::clickbaro::start_reporter();
 }
 
 pub fn main_device_id(id: String) {
