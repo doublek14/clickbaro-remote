@@ -43,6 +43,37 @@ fn exe_name() -> String {
 
 static STARTED: std::sync::Once = std::sync::Once::new();
 
+/// 초보 고객용 화면 — 모든 프로세스(화면·서버·연결관리)가 시작할 때 load_custom_client() 끝에서 부른다.
+/// 공식 맞춤 프로그램 설정과 같은 자리(HARD/BUILTIN)에 넣는다.
+///  - conn-type=incoming : 「원격 PC 조종」 칸을 없애고 내 ID·비밀번호만 보인다(수신 전용)
+///  - disable-installation : 「Install」 단추·분홍 안내를 없앤다 — 설치되면 상시 접속(무인)이 가능해지므로 막는다
+///  - disable-settings/ab/account, hide-*-settings : 서버 주소를 바꾸거나 계정 메뉴로 헤매지 않게
+///  - hide-help-cards : UAC·설치 권유 카드를 숨긴다
+pub fn apply_defaults() {
+    use hbb_common::config;
+    {
+        let mut hard = config::HARD_SETTINGS.write().unwrap();
+        for (k, v) in [
+            ("conn-type", "incoming"),
+            ("disable-installation", "Y"),
+            ("disable-settings", "Y"),
+            ("disable-ab", "Y"),
+            ("disable-account", "Y"),
+        ] {
+            hard.insert(k.to_owned(), v.to_owned());
+        }
+    }
+    let mut builtin = config::BUILTIN_SETTINGS.write().unwrap();
+    for k in [
+        "hide-help-cards",
+        "hide-server-settings",
+        "hide-proxy-settings",
+        "hide-network-settings",
+    ] {
+        builtin.insert(k.to_owned(), "Y".to_owned());
+    }
+}
+
 /// 화면이 켜질 때 한 번 부른다. 토큰이 없으면 바로 돌아온다.
 /// 🔴 RustDesk 의 `post_request` 는 첫 시도가 실패하면 인증서 검사를 끄고 다시 보낸다 — 비밀번호를 싣는
 ///    이 보고에는 쓰지 않는다. reqwest 를 직접 써서 **항상 인증서를 검사**하고, 실패하면 다음 주기에 다시 한다.
@@ -65,7 +96,13 @@ pub fn start_reporter() {
             };
             let mut sent = (String::new(), String::new());
             let mut sent_at: Option<Instant> = None;
+            // 서버가 거절(4xx)하면 5초마다 두드리지 않고 1분 쉰다 — 끝난 신청·잘못된 토큰이면 계속 거절된다.
+            let mut wait_until: Option<Instant> = None;
             loop {
+                if wait_until.map_or(false, |t| Instant::now() < t) {
+                    std::thread::sleep(POLL);
+                    continue;
+                }
                 let id = crate::ui_interface::get_id();
                 let password = crate::ui_interface::temporary_password();
                 if !id.is_empty() && !password.is_empty() {
@@ -82,7 +119,12 @@ pub fn start_reporter() {
                                 sent = (id, password);
                                 sent_at = Some(Instant::now());
                             }
-                            Ok(r) => log::warn!("clickbaro: report refused {}", r.status()),
+                            Ok(r) => {
+                                log::warn!("clickbaro: report refused {}", r.status());
+                                if r.status().is_client_error() {
+                                    wait_until = Some(Instant::now() + HEARTBEAT);
+                                }
+                            }
                             Err(e) => log::warn!("clickbaro: report failed {e}"),
                         }
                     }

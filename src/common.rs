@@ -2493,6 +2493,9 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 pub fn load_custom_client() {
+    // 클릭바로 원격지원: 초보 고객용 화면 설정(수신 전용·설치 금지 등) — 어떤 경로로 돌아와도 먼저 넣는다
+    #[cfg(all(feature = "flutter", not(any(target_os = "android", target_os = "ios"))))]
+    crate::clickbaro::apply_defaults();
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());

@@ -31,9 +31,22 @@ jobs:
       run: |
         $exe = Get-ChildItem dl -Filter "ClickbaroRemote_cbs-*.exe" | Select-Object -First 1
         Start-Process -FilePath $exe.FullName
+        Start-Sleep -Seconds 40
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+        $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+        $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+        $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+        $bmp.Save("$pwd\screen.png"); $g.Dispose(); $bmp.Dispose()
         $m = [int]'${{ inputs.minutes }}'; if ($m -lt 1) { $m = 1 }; if ($m -gt 20) { $m = 20 }
         Start-Sleep -Seconds (60 * $m)
         Get-Process | Where-Object { $_.ProcessName -match 'rustdesk|clickbaro' } | Format-Table -AutoSize
+    - name: Upload screenshot
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: smoke-screen
+        path: screen.png
+        if-no-files-found: ignore
     - name: Show logs
       if: always()
       shell: pwsh
