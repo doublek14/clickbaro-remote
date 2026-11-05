@@ -49,6 +49,7 @@ static STARTED: std::sync::Once = std::sync::Once::new();
 ///  - disable-installation : 「Install」 단추·분홍 안내를 없앤다 — 설치되면 상시 접속(무인)이 가능해지므로 막는다
 ///  - disable-settings/ab/account, hide-*-settings : 서버 주소를 바꾸거나 계정 메뉴로 헤매지 않게
 ///  - hide-help-cards : UAC·설치 권유 카드를 숨긴다
+///  - approve-mode=password·일회용 비밀번호만 : 수락/거절 창 없이, 맞는 비밀번호(상담원 링크)만 연결
 pub fn apply_defaults() {
     use hbb_common::config;
     {
@@ -62,6 +63,13 @@ pub fn apply_defaults() {
         ] {
             hard.insert(k.to_owned(), v.to_owned());
         }
+    }
+    // 수락/거절 창을 띄우지 않는다 — 초보 고객은 그 창을 못 본다(대표 실측 2026-11-05).
+    // 비밀번호(상담원 링크에만 들어 있다)가 맞을 때만 바로 연결, 모르는 사람의 연결 요청은 창 없이 거절.
+    {
+        let mut over = config::OVERWRITE_SETTINGS.write().unwrap();
+        over.insert("approve-mode".to_owned(), "password".to_owned());
+        over.insert("verification-method".to_owned(), "use-temporary-password".to_owned());
     }
     let mut builtin = config::BUILTIN_SETTINGS.write().unwrap();
     for k in [
